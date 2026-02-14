@@ -23,7 +23,7 @@ class AgenticResearchService:
     """
 
     # 🔐 PUT YOUR REAL TAVILY KEY HERE
-    TAVILY_API_KEY = "YOUR_TAVILY_API_KEY_HERE"
+    TAVILY_API_KEY = "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"
 
     # -------------------------------------------------------
     # PUBLIC ENTRYPOINT

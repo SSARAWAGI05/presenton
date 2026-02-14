@@ -288,8 +288,20 @@ async def stream_presentation(
             event="response",
             data=json.dumps({"type": "chunk", "chunk": '{ "slides": [ '}),
         ).to_string()
+        
+        total_layouts = len(layout.slides)
+
         for i, slide_layout_index in enumerate(structure.slides):
+
+            if slide_layout_index >= total_layouts or slide_layout_index < 0:
+                print(
+                    f"[WARNING] Invalid layout index {slide_layout_index}. "
+                    f"Total layouts: {total_layouts}. Falling back to 0."
+                )
+                slide_layout_index = 0
+
             slide_layout = layout.slides[slide_layout_index]
+
 
             try:
                 slide_content = await get_slide_content_from_type_and_outline(
@@ -677,7 +689,15 @@ async def generate_presentation_handler(
         slides: List[SlideModel] = []
 
         slide_layout_indices = presentation_structure.slides
-        slide_layouts = [layout_model.slides[idx] for idx in slide_layout_indices]
+        total_layouts = len(layout_model.slides)
+
+        slide_layouts = [
+            layout_model.slides[idx]
+            if 0 <= idx < total_layouts
+            else layout_model.slides[0]
+            for idx in slide_layout_indices
+        ]
+
 
         # Schedule slide content generation and asset fetching in batches of 10
         batch_size = 10
