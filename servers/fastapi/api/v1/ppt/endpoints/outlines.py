@@ -8,7 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.presentation_outline_model import PresentationOutlineModel
+from models.presentation_outline_model import (
+    PresentationOutlineModel,
+    SlideOutlineModel,
+)
 from models.sql.presentation import PresentationModel
 from models.sse_response import (
     SSECompleteResponse,
@@ -60,9 +63,10 @@ async def stream_outlines(
                 additional_context = "\n\n".join(documents)
 
         # --------------------------------------------
-        # AGENTIC RESEARCH INJECTION
+        # AGENTIC RESEARCH
         # --------------------------------------------
         research_context = ""
+        research_sources = []
 
         if presentation.web_search:
             yield SSEStatusResponse(
@@ -71,9 +75,13 @@ async def stream_outlines(
 
             try:
                 research_service = AgenticResearchService()
-                research_context = await research_service.run(
+
+                research_data = await research_service.run(
                     presentation.content
                 )
+
+                research_context = research_data.get("summary", "")
+                research_sources = research_data.get("sources", [])
 
                 if research_context:
                     yield SSEStatusResponse(
@@ -165,12 +173,39 @@ async def stream_outlines(
         ]
 
         # --------------------------------------------
+        # AUTO ADD REFERENCES SLIDE
+        # --------------------------------------------
+        if research_sources:
+            yield SSEStatusResponse(
+                status="Adding references slide..."
+            ).to_string()
+
+            references_text = "References\n\n"
+
+            for i, source in enumerate(research_sources, 1):
+                references_text += (
+                    f"{i}. {source.get('title', 'Unknown Source')}\n"
+                    f"{source.get('url', '')}\n\n"
+                )
+
+            presentation_outlines.slides.append(
+                SlideOutlineModel(content=references_text)
+            )
+
+            # Adjust slide count
+            presentation.n_slides += 1
+
+        # --------------------------------------------
         # SAVE TO DATABASE
         # --------------------------------------------
         presentation.outlines = presentation_outlines.model_dump()
         presentation.title = get_presentation_title_from_outlines(
             presentation_outlines
         )
+
+        # Optional: persist research sources
+        if research_sources:
+            presentation.research_sources = research_sources
 
         sql_session.add(presentation)
         await sql_session.commit()
